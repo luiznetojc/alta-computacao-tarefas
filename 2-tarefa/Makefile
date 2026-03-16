@@ -1,5 +1,5 @@
 CC = gcc
-SRC = tarefa2.c
+SRC = teste-parelelismo.c
 
 all: o0 o2 o3
 
@@ -14,11 +14,7 @@ o3:
 
 run_o0:
 	./programa_O0
-
-run_o2:
 	./programa_O2
-
-run_o3:
 	./programa_O3
 
 clean:

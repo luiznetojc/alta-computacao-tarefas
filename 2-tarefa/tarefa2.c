@@ -4,34 +4,34 @@
 
 #define VALOR 1000000000  // 100 milhões
 
+double timeFormater(){
+    return (end.tv_sec - start.tv_sec) * 1000.0 +
+           (end.tv_usec - start.tv_usec) / 1000.0;
+}
+
 int main() {
 
+	struct timeval start, end;
     unsigned long long *vetor = malloc(sizeof(unsigned long long) * VALOR);
 
     for (unsigned long long i = 0; i < VALOR; i++) {
         vetor[i] = i + 1;
     }
 
-    struct timeval start, end;
-
-    gettimeofday(&start, NULL);
-
     unsigned long long total = 0;
+	gettimeofday(&start, NULL);
 
-    for (unsigned long long i = 0; i < VALOR; i++) {
+	for (unsigned long long i = 0; i < VALOR; i++) {
         total += vetor[i];
     }
 
     gettimeofday(&end, NULL);
 
-    double tempo = (end.tv_sec - start.tv_sec) * 1000.0 +
-                   (end.tv_usec - start.tv_usec) / 1000.0;
-
+double tempo = timeFormater();
     printf("Tempo normal: %f ms\n", tempo);
-
-    gettimeofday(&start, NULL);
-
+		
     unsigned long long soma1 = 0, soma2 = 0, soma3 = 0, soma4 = 0;
+    gettimeofday(&start, NULL);
 
     for (unsigned long long i = 0; i < VALOR; i += 4) {
         soma1 += vetor[i];
@@ -44,8 +44,7 @@ int main() {
 
     gettimeofday(&end, NULL);
 
-    double tempo_paralelo = (end.tv_sec - start.tv_sec) * 1000.0 +
-                            (end.tv_usec - start.tv_usec) / 1000.0;
+    double tempo_paralelo = timeFormater();
 
     printf("Tempo paralelo: %f ms\n", tempo_paralelo);
 

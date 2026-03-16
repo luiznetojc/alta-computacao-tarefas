@@ -3,16 +3,19 @@
 #include <sys/time.h>
 
 #define VALOR 1000000000
+struct timeval start, end;
+
+double timeFormater(){
+    return (end.tv_sec - start.tv_sec) * 1000.0 +
+           (end.tv_usec - start.tv_usec) / 1000.0;
+}
 
 double tempo_execucao(void (*func)(unsigned long long*), unsigned long long *vetor) {
-    struct timeval start, end;
-
     gettimeofday(&start, NULL);
     func(vetor);
     gettimeofday(&end, NULL);
 
-    return (end.tv_sec - start.tv_sec) * 1000.0 +
-           (end.tv_usec - start.tv_usec) / 1000.0;
+    return timeFormater();
 }
 
 void teste1(unsigned long long *vetor) {
