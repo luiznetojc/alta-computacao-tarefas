@@ -1,0 +1,2 @@
+- utilize pragma omp critical, restruturado com pragma omp parallel, e pragma omp for
+- e aplicando clausulas private, firstprivate, lastprivate e shared
