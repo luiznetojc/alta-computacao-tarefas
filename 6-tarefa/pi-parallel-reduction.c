@@ -8,15 +8,15 @@ double random_double_r(unsigned int *seed)
 	return (double)rand_r(seed) / RAND_MAX;
 }
 
-double estimate_pi_parallel_wrong(long long total_pontos)
+double estimate_pi_parallel_reduction(long long total_pontos)
 {
 	long long pontos_dentro_circulo = 0;
 
 #pragma omp parallel
 	{
 		unsigned int seed = 42u + (unsigned int)omp_get_thread_num() * 97u;
-
-#pragma omp for
+		
+#pragma omp for reduction(+ : pontos_dentro_circulo)
 		for (long long i = 0; i < total_pontos; i++)
 		{
 			double x = random_double_r(&seed);
@@ -24,7 +24,6 @@ double estimate_pi_parallel_wrong(long long total_pontos)
 
 			if (x * x + y * y <= 1.0)
 			{
-				// Errado de proposito: condicao de corrida em pontos_dentro_circulo.
 				pontos_dentro_circulo++;
 			}
 		}
@@ -43,12 +42,12 @@ int main(int argc, char *argv[])
 
 	struct timeval inicio, fim;
 	gettimeofday(&inicio, NULL);
-	double pi_estimate = estimate_pi_parallel_wrong(total_pontos);
+	double pi_estimate = estimate_pi_parallel_reduction(total_pontos);
 	gettimeofday(&fim, NULL);
 
 	double tempo_total = (fim.tv_sec - inicio.tv_sec) + (fim.tv_usec - inicio.tv_usec) / 1000000.0;
 
-	printf("Versao: parallel for SEM protecao (errada)\n");
+	printf("Versao: parallel + reduction\n");
 	printf("Threads: %d\n", omp_get_max_threads());
 	printf("Pontos: %lld\n", total_pontos);
 	printf("Estimativa de Pi: %f\n", pi_estimate);
