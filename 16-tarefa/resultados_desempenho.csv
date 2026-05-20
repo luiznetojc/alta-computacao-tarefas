@@ -1,0 +1,5 @@
+Execucao,Chunk_Size,Tarefas,Tempo_Total_s,Speedup,Eficiencia_Percentual
+Sequencial,10000000,1,1.417608,1.00,0.0
+Paralela_Alto,1000000,10,0.340426,4.16,59.4
+Paralela_Medio,100000,100,0.289629,4.89,69.8
+Paralela_Baixo,10000,1000,0.285411,4.96,70.8

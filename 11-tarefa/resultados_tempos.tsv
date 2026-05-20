@@ -1,0 +1,6 @@
+versao	threads	tempo_medio_s	velmax
+navier_serial	1	2.472637	0.000796
+navier_static_collapse	1	4.408868	0.000796
+navier_static_collapse	2	2.409080	0.000796
+navier_static_collapse	4	1.316383	0.000796
+navier_static_collapse	8	0.914911	0.000796
