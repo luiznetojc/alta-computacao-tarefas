@@ -1,0 +1,25 @@
+Compiling...
+rm -f heat_cpu heat_gpu_basic heat_gpu_opt
+nvc -fast -mp=gpu -o heat_cpu heat_cpu.c
+nvc -fast -mp=gpu -o heat_gpu_basic heat_gpu_basic.c
+nvc -fast -mp=gpu -o heat_gpu_opt heat_gpu_opt.c
+Running tests and generating CSV data...
+=== Running CPU Size: 500 ===
+=== Running GPU Basic Size: 500 ===
+=== Running GPU Opt Size: 500 ===
+=== Running CPU Size: 1000 ===
+=== Running GPU Basic Size: 1000 ===
+=== Running GPU Opt Size: 1000 ===
+=== Running CPU Size: 2000 ===
+=== Running GPU Basic Size: 2000 ===
+=== Running GPU Opt Size: 2000 ===
+=== Running CPU Size: 4000 ===
+=== Running GPU Basic Size: 4000 ===
+=== Running GPU Opt Size: 4000 ===
+=== Running CPU Size: 8000 ===
+=== Running GPU Basic Size: 8000 ===
+=== Running GPU Opt Size: 8000 ===
+Profiling with nsys for n=1000 nsteps=10
+SKIPPED: /home/lggneto/21-tarefa/profile_basic.sqlite does not contain NV Tools Extension (NVTX) data.
+SKIPPED: /home/lggneto/21-tarefa/profile_opt.sqlite does not contain NV Tools Extension (NVTX) data.
+Done.

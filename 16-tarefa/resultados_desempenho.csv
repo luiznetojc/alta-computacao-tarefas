@@ -1,5 +1,12 @@
-Execucao,Chunk_Size,Tarefas,Tempo_Total_s,Speedup,Eficiencia_Percentual
-Sequencial,10000000,1,1.417608,1.00,0.0
-Paralela_Alto,1000000,10,0.340426,4.16,59.4
-Paralela_Medio,100000,100,0.289629,4.89,69.8
-Paralela_Baixo,10000,1000,0.285411,4.96,70.8
+EIXO 1: Trabalhadores (Com 100 tarefas medias fixas de 100K)
+Processos,Qty_Trabalhadores,Tempo_Total_s,Speedup,Eficiencia_Percentual
+1,0,1.442664,1.00,-
+2,1,1.463022,0.986,98.6
+4,3,0.538199,2.68,89.3
+8,7,0.285282,5.06,72.2
+
+EIXO 2: Tamanho das Tarefas/Chunks (Com 7 trabalhadores fixos)
+Chunk_Size,Qty_Tarefas,Tempo_Total_s,Speedup,Eficiencia_Percentual
+1000000,10,0.359765,4.01,57.3
+100000,100,0.285282,5.06,72.2
+10000,1000,0.305442,4.72,67.4

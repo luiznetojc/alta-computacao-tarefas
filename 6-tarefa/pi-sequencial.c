@@ -1,4 +1,4 @@
-#include <stdio.h>
+t#include <stdio.h>
 #include <stdlib.h>
 #include <omp.h>
 #include <sys/time.h>

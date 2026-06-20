@@ -23,29 +23,38 @@ Uma vez que é estipulado o *handshake* contínuo de pacotes onde o **Líder ate
 
 ### Execução de Benchmarks
 
-A chamada `make` constrói o binário `primos_master_worker`. O *job* enviado para o slurm no cluster executa variações de granulação:
-- **`Execucao Sequencial (P=1)`** Fornece o Base time de processamento para comparar aceleração.
-- **`Execucao Paralela c/ Chunk Alto`** Distribui poucas tarefas.
-- **`Execucao Paralela c/ Chunk Medio`** Garante melhor balanceamento entre a variância dos limites matemáticos superiores da série temporal primária dos trabalhadores VS o tráfego da rede.
-- **`Execucao Paralela c/ Chunk Baixo`** Demostração de sobrecarga de comutação do Send/Recv.
+A chamada `make` constrói o binário `primos_master_worker`. O *job* enviado para o slurm no cluster executa a avaliação em dois eixos de complexidade para um teto fixo de 10.000.000 de números analisados:
+1. **Variando a Quantidade de Trabalhadores:** Avaliando a eficiência com 1, 3 e 7 trabalhadores, mantendo a carga estável em 100 Tarefas de 100K.
+2. **Variando a Quantidade de Tarefas:** Fixando o número de 7 Trabalhadores (`np 8`) e mudando o tamanho do payload. Testando Poucas Tarefas Massivas (1M), Tarefas Equilibradas (100K) e Muitas Tarefas Minúsculas (10K).
 
 Com esta heurística comprova-se o balanço eficiente da infraestrutura passiva MPI.
 
 ### Resultados e Avaliação de Desempenho no Cluster (NPAD)
 
-Abaixo estão os resultados extraídos do cluster NPAD com `mpirun -np 8` (1 Líder + 7 Trabalhadores), buscando primos até 10.000.000. O total de números primos encontrados foi consistente em todas as execuções (664.579 primos).
+Abaixo estão os resultados atualizados extraídos do cluster NPAD buscando primos até 10.000.000. O total de números primos encontrados foi estritamente consistente em todas as execuções (664.579 primos). O tempo estritamente sequencial obtido foi de **1.442664 s**.
 
-| Execução | Chunk Size | Tarefas Processadas | Tempo Total (s) | Speedup (vs Seq) | Eficiência (sobre 7 trab) |
-|:---|:---:|:---:|:---:|:---:|:---:|
-| 1. Sequencial (Baseline) | N/A | 1 | 1.417608 | 1.00x | - |
-| 2. Paralela (Chunk Alto) | 1.000.000 | 10 | 0.340426 | **4.16x** | **59.4%** |
-| 3. Paralela (Chunk Médio) | 100.000 | 100 | 0.289629 | **4.89x** | **69.8%** |
-| 4. Paralela (Chunk Baixo) | 10.000 | 1.000 | 0.285411 | **4.96x** | **70.8%** |
+#### Eixo 1: Aumento da Quantidade de Trabalhadores (Chunk estável em 100.000)
 
-#### Análise dos Resultados:
-- **Speedup e Eficiência:** O cálculo do Speedup foi feito comparando a versão sequencial (1.417s) com as versões mapeadas nos 7 trabalhadores. O fator máximo ideal almejado é de 7x. 
-- A versão de **Chunk Baixo/Médio apresentou um limite em torno de ~5.0x de Speedup (70% de Eficiência)**. Essa queda sobre o ideal (7x) engloba os atrasos associados à barreira inicial, e o *overhead* de latência provocado pelas requisições frequentes trafegadas pelas placas e cabo de rede (InfiniBand/Ethernet do NPAD).
-- O **Chunk Alto** resultou no pior tempo concorrente, tendo Speedup de apenas 4.16x. A causa é puramente o balanceamento de carga desigual. Distribuir a malha em apenas 10 fatias massivas num pool com 7 operários deixa a rede em inanição e agrava os últimos processos de terminar. Já chunks de *10k* e *100k* estabilizaram o tempo pelo princípio ideal do escalonador Master-Worker: a alta dinamicidade na entrega impediu que alguns nós ficassem ociosos precocemente.
+| Processos MPI | Qt. Trabalhadores | Tempo Total (s) | Speedup | Eficiência (por trab) |
+|:---:|:---:|:---:|:---:|:---:|
+| 2 (`np 2`) | 1 | 1.463022 | **0.986x** | **98.6%** |
+| 4 (`np 4`) | 3 | 0.538199 | **2.68x** | **89.3%** |
+| 8 (`np 8`) | 7 | 0.285282 | **5.06x** | **72.2%** |
+
+#### Eixo 2: Aumento da Quantidade de Tarefas (7 Trabalhadores Fixos)
+
+| Tamanho do Chunk | Qt. Tarefas Geradas | Tempo Total (s) | Speedup | Eficiência |
+|:---:|:---:|:---:|:---:|:---:|
+| Grande (1.000.000) | 10 | 0.359765 | **4.01x** | **57.3%** |
+| Médio (100.000) | 100 | 0.285282 | **5.06x** | **72.2%** |
+| Pequeno (10.000) | 1.000 | 0.305442 | **4.72x** | **67.4%** |
+
+#### Análise e Conclusões:
+1. **Curva de Trabalhadores:** Quanto mais operários foram adicionados (1 -> 3 -> 7), nota-se o aumento do Speedup, porém com a clássica curva decrescente na eficiência individual por trabalhador (de 98% para 72%). Como o Líder atua apenas como gargalo de funil (não computa primos), adicionar dezenas de instâncias num cluster tende a inundar o protocolo limitando a eficiência ideal.
+2. **Escalonamento pelo Número de Tarefas:**
+   - **Poucas Tarefas Engessadas:** Quando haviam apenas 10 fatias para 7 operários, o _Speedup_ amargurou **4.0x**. O desequilíbrio é grave: os nós que receberam os últimos pacotes com os valores primos altíssimos demoraram mais para processar da conta, enquanto seus pares já haviam fechado o expediente cruzando braços (`DIETAG`).
+   - **Muitas Tarefas Pulverizadas:** Ao fraturar em 1.000 microtarefas, a sobrecarga da rede consumiu o Speedup que regrediu a **4.72x**. O Líder gastou frações de segundos preciosas gerenciando milhares de *Sends/Recvs* ao invés dos processos estarem inteiramente calculando no silício.
+   - **Ponto "Sweetspot":** Dividir a simulação em um número generoso de blocos médios (100 tarefas p/ 7 workers) entregou o tempo mais curto na rede (Speedup de **5.06x**, 72% de aproveitamento das peças computacionais). A dinamicidade do modelo absorveu bem as distorções sem esfolar os barramentos de rede da InfiniBand.
 
 ---
 
