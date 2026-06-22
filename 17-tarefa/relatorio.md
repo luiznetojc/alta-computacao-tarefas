@@ -10,8 +10,10 @@ O processo raiz (`rank 0`) é responsável por instanciar a matriz original comp
 
 1. **\`MPI_Bcast\`: Distribuição do Vetor**
    O vetor $x$ é distribuído em sua totalidade para todos os processos presentes no comunicador global. Como a multiplicação de uma linha da matriz $A$ sempre engloba todos os índices de colunas combinados ponto a ponto com o vetor $x$, é imprescindível que a memória local de cada processo possua uma cópia exata de $x$.
+
 2. **\`MPI_Scatter\`: Divisão da Matriz**
    Se possuímos $M$ linhas e $P$ processos, então cada processo operará em uma fatia equivalente a \`M / P\` linhas continuas de $A$. A função `MPI_Scatter` despacha perfeitamente de forma intercalada esse sequenciamento da matriz contígua alocada.
+
 3. **\`MPI_Gather\`: Agregando os Resultados**
    Terminadas as operações de matriz-vetor com os laços \`for\`, a fatia correspondente do vetor destino $y$ gravada na memória de cada processo é empurrada de volta e aglomerada na máquina raiz. A junção dessas fatias reconstrói a resposta final $y$.
 
@@ -185,3 +187,7 @@ int main(int argc, char **argv)
 	return 0;
 }
 ```
+
+
+### Gráficos
+![Gráfico de Dimensão](./tarefa17_plot.png)

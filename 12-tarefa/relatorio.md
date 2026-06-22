@@ -21,6 +21,7 @@ Abaixo estão os tempos de execução em segundos para as diferentes estratégia
 A escalabilidade forte é avaliada mantendo o tamanho do problema **fixo** e aumentando o número de processadores. O ideal absoluto seria que, ao dobrarmos as *threads*, o tempo caísse pela metade (Speedup $S = N$).
 
 **Cálculo de Speedup ($S = T_1 / T_n$) no teste para 16 Threads:**
+
 * **static:** $17.4025 / 1.7936 = 9.70x$
 * **static_collapse:** $9.1055 / 0.9031 = 10.08x$
 * **dynamic(8):** $17.3998 / 1.4895 = 11.68x$
@@ -45,3 +46,47 @@ Ao compararmos os agendamentos (`static`, `dynamic`, `guided` e `collapse`), os 
    * A versão `static` normal perde absurdamente para a `static_collapse`. Ao invés de usar uma Thread gerindo e abrindo filas de milhares sub-laços pra varrer `NY` separadamente, o _collapse_ achata os laços `i` e `j`. Isso cria um loop plano gigante. Evita-se completamente que as Threads saltem ou encontrem falhas prematuras de L1 e barreiras ao longo de blocos de iterações internas iterados isoladamente. Esse foi o principal ganho algorítmico frente às abordagens ingênuas.
 2. **Dynamic vs Guided:**
    * O `dynamic(8)` requer constante realocação de fatias ($chunks$ de tamanho 8) a toda hora por disputa das threads ativas que ficaram velozmente desocupadas, aumentando os acessos sincronos no agendador OpenMP. O modelo `guided` provou ser melhor que ele ($1.45s$ vs $1.48s$) já que repassa partes grandonas inicialmente para esgotar as filas espaciais, poupando trabalho do "Maestro OpenMP", e minimizando a sobrecarga no final.
+
+### Script de Submissão (`job.sh`)
+```bash
+#!/bin/bash 
+#SBATCH --job-name=navier_escala 
+#SBATCH --time=0-0:30
+#SBATCH --partition=intel-128
+#SBATCH --cpus-per-task=16
+#SBATCH --hint=compute_bound
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+
+# Compila os códigos
+make clean
+make
+
+# Script para avaliar a escalabilidade
+echo "======================================"
+echo "Iniciando benchmarks (Escalabilidade)"
+echo "Número máximo de threads do Job: $SLURM_CPUS_PER_TASK"
+echo "======================================"
+
+echo -e "\n=== Teste navier_serial ==="
+./navier_serial
+
+for THREADS in 1 2 4 8 16; do
+    echo -e "\n======================="
+    echo "Testando com $THREADS Threads"
+    echo "======================="
+
+    echo "--- navier_static ---"
+    ./navier_static $THREADS
+
+    echo "--- navier_static_collapse ---"
+    ./navier_static_collapse $THREADS
+
+    echo "--- navier_dynamic ---"
+    ./navier_dynamic $THREADS
+
+    echo "--- navier_guided ---"
+    ./navier_guided $THREADS
+done
+
+```

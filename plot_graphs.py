@@ -13,7 +13,7 @@ data_20 = {
 df_20 = pd.DataFrame(data_20)
 
 # Data for Task 21
-df_21 = pd.read_csv('/Users/adm/Documents/Studies/alta-computacao-tarefas/21-tarefa/results.csv')
+df_21 = pd.read_csv('/home/luiz/Documents/alta-computacao-tarefas/21-tarefa/results.csv')
 
 def plot_bar_chart(df, title, filename):
     sizes = df['Size'].unique()
@@ -89,6 +89,6 @@ def plot_line_chart(df, title, filename):
 df_21['Version'] = df_21['Version'].replace({'GPU_Basic': 'GPU Basic', 'GPU_Opt': 'GPU Optimized'})
 df_20['Version'] = df_20['Version'].replace({'GPU_Basic': 'GPU Basic', 'GPU_Opt': 'GPU Optimized'})
 
-plot_bar_chart(df_20, 'Tarefa 20', '/Users/adm/Documents/Studies/alta-computacao-tarefas/tarefa_20_bar_chart.png')
-plot_bar_chart(df_21, 'Tarefa 21', '/Users/adm/Documents/Studies/alta-computacao-tarefas/tarefa_21_bar_chart.png')
-plot_line_chart(df_21, 'Tarefa 21 (Log Scale)', '/Users/adm/Documents/Studies/alta-computacao-tarefas/tarefa_21_line_chart.png')
+plot_bar_chart(df_20, 'Tarefa 20', '/home/luiz/Documents/alta-computacao-tarefas/tarefa_20_bar_chart.png')
+plot_bar_chart(df_21, 'Tarefa 21', '/home/luiz/Documents/alta-computacao-tarefas/tarefa_21_bar_chart.png')
+plot_line_chart(df_21, 'Tarefa 21 (Log Scale)', '/home/luiz/Documents/alta-computacao-tarefas/tarefa_21_line_chart.png')

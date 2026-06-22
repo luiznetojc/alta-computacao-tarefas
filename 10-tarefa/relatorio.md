@@ -318,3 +318,6 @@ int main(int argc, char *argv[])
 }
 
 ```
+
+### Gráficos
+![Gráfico de Desempenho](./tarefa10_plot.png)

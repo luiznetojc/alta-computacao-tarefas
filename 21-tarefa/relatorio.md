@@ -6,11 +6,13 @@ Este relatório detalha os resultados da execução da simulação da equação 
 O código foi submetido e executado no cluster NPAD, utilizando a fila/partição `gpu-8-v100`, que dispõe de aceleradores NVIDIA V100.
 O código foi compilado utilizando o `nvc` (NVIDIA HPC SDK) com a flag `-fast -mp=gpu` para habilitar a vetorização agressiva e o offloading de OpenMP para a GPU.
 
-Foram avaliadas três versões:
+Foram avaliadas cinco versões:
 
 1. **CPU (Baseline)**: Paralelização baseada em CPU usando `#pragma omp parallel for collapse(2)`.
-2. **GPU Basic**: Offloading básico, onde a transferência de dados e a execução do kernel ocorrem a cada passo de tempo iterativo (`#pragma omp target teams distribute parallel for`).
-3. **GPU Optimized**: Movimentação otimizada, utilizando `#pragma omp target data` para transferir os arrays `u` e `u_tmp` para a GPU no início de todos os timesteps e trazê-los de volta apenas no fim, evitando transferências repetidas no loop principal.
+2. **GPU Basic**: Offloading básico, onde a transferência de dados e a execução do kernel ocorrem a cada passo iterativo.
+3. **GPU Optimized**: Movimentação otimizada, utilizando `#pragma omp target data` para o tempo de vida do laço temporal.
+4. **GPU Enter/Exit**: Utiliza as diretivas `#pragma omp target enter data` e `exit data` para o mapeamento de memória desestruturado.
+5. **GPU Loop**: Aplica a diretiva mais recente `#pragma omp target teams loop collapse(2)` com intuito de expor paralelismo descritivo.
 
 ## 2. Comparação de Desempenho
 
@@ -18,36 +20,48 @@ O código foi executado com diferentes tamanhos de malha (`N x N`), por 100 *tim
 
 | Versão | Tamanho (N) | Tempo de Compute (s) | Tempo Total (s) |
 | :--- | :--- | :--- | :--- |
-| **CPU** | 500 | 0.124s | 0.132s |
-| **GPU Basic** | 500 | 0.381s | 0.390s |
-| **GPU Optimized**| 500 | 0.319s | 0.328s |
+| **CPU** | 500 | 0.112s | 0.120s |
+| **GPU Basic** | 500 | 0.338s | 0.345s |
+| **GPU Optimized**| 500 | 0.246s | 0.254s |
+| **GPU Enter/Exit**| 500 | 0.247s | 0.254s |
+| **GPU Loop**| 500 | 0.245s | 0.253s |
 | --- | --- | --- | --- |
-| **CPU** | 1000 | 0.490s | 0.519s |
-| **GPU Basic** | 1000 | 0.576s | 0.606s |
-| **GPU Optimized**| 1000 | 0.326s | 0.357s |
+| **CPU** | 1000 | 0.442s | 0.469s |
+| **GPU Basic** | 1000 | 0.505s | 0.529s |
+| **GPU Optimized**| 1000 | 0.260s | 0.287s |
+| **GPU Enter/Exit**| 1000 | 0.249s | 0.276s |
+| **GPU Loop**| 1000 | 0.261s | 0.288s |
 | --- | --- | --- | --- |
-| **CPU** | 2000 | 1.969s | 2.085s |
-| **GPU Basic** | 2000 | 1.181s | 1.297s |
-| **GPU Optimized**| 2000 | 0.335s | 0.460s |
+| **CPU** | 2000 | 1.786s | 1.894s |
+| **GPU Basic** | 2000 | 1.122s | 1.230s |
+| **GPU Optimized**| 2000 | 0.275s | 0.385s |
+| **GPU Enter/Exit**| 2000 | 0.262s | 0.371s |
+| **GPU Loop**| 2000 | 0.275s | 0.382s |
 | --- | --- | --- | --- |
-| **CPU** | 4000 | 7.811s | 8.328s |
-| **GPU Basic** | 4000 | 3.789s | 4.293s |
-| **GPU Optimized**| 4000 | 0.383s | 0.886s |
+| **CPU** | 4000 | 7.131s | 7.592s |
+| **GPU Basic** | 4000 | 3.521s | 3.981s |
+| **GPU Optimized**| 4000 | 0.324s | 0.782s |
+| **GPU Enter/Exit**| 4000 | 0.323s | 0.779s |
+| **GPU Loop**| 4000 | 0.322s | 0.780s |
 | --- | --- | --- | --- |
-| **CPU** | 8000 | 31.097s | 33.121s |
-| **GPU Basic** | 8000 | 14.013s | 16.021s |
-| **GPU Optimized**| 8000 | 0.578s | 2.578s |
+| **CPU** | 8000 | 28.512s | 30.378s |
+| **GPU Basic** | 8000 | 13.041s | 14.923s |
+| **GPU Optimized**| 8000 | 0.519s | 2.381s |
+| **GPU Enter/Exit**| 8000 | 0.518s | 2.381s |
+| **GPU Loop**| 8000 | 0.517s | 2.375s |
 
 ### Análise dos Tempos
+
 - **Malhas Pequenas (N=500 e N=1000)**: Para tamanhos de dados menores, a **CPU é mais rápida** ou competitiva. O *overhead* de inicialização e offloading da GPU supera o ganho de aceleração.
-- **Tamanho Intermediário e Superior (N=4000+)**: O poder computacional massivo da GPU entra em destaque. Em N=4000, a GPU (Opt) é ~20 vezes mais rápida no *compute* em relação à CPU.
-- **Basic vs Optimized**: O gargalo de transferência (PCIe bus) torna-se excessivamente nítido em `N=8000`. Enquanto a versão **Basic** levou 14 segundos (fazendo cópia para a GPU a cada um dos 100 timesteps de matrizes enormes), a versão **Optimized** rodou em absurdos **0.57 segundos** (fazendo o tráfego pesado apenas no início e no fim, mantendo os cálculos em VRAM pelo restante da execução).
+- **Tamanho Intermediário e Superior (N=4000+)**: O poder computacional massivo da GPU entra em destaque. Em N=8000, as versões de GPU com dados otimizados superam incrivelmente o processador central (28.5s vs 0.51s em solve time).
+- **Basic vs Optimized**: O gargalo de transferência (PCIe bus) torna-se excessivamente nítido em `N=8000`. Enquanto a versão **Basic** levou 13.04 segundos de compute, as versões **Optimized**, **Enter/Exit** e **Loop** completaram a mesma etapa em `0.51` segundos (mantendo os cálculos em VRAM pelo restante da execução).
+- **Enter/Exit e Loop**: As duas novas implementações apresentaram desempenho equivalente à `GPU Optimized` (com o mesmo nível de tráfego de memória), mas expõem uma organização de código diferente. `Enter/Exit` provê controle de memória desestruturado e `omp loop` sinaliza melhorias modernas para escalabilidade de equipes de threads na GPU.
 
-Em resumo, mapear os dados uma única vez na GPU usando a cláusula `target data` impede que o barramento de dados domine a execução, evitando um enorme estado de ociosidade da GPU e otimizando a performance em dezenas de vezes para tamanhos problemáticos robustos.
+Em resumo, o mapeamento efetivo de dados evita ociosidade excessiva no kernel, extraindo ao máximo os 5120 núcleos CUDA da V100 sem gargalos de I/O.
 
-![Gráfico de Barras - Tarefa 21](/Users/adm/Documents/Studies/alta-computacao-tarefas/tarefa_21_bar_chart.png)
+![Gráfico de Barras - Tarefa 21](./tarefa_21_bar_chart.png)
 
-![Gráfico de Escalabilidade - Tarefa 21](/Users/adm/Documents/Studies/alta-computacao-tarefas/tarefa_21_line_chart.png)
+![Gráfico de Escalabilidade - Tarefa 21](./tarefa_21_line_chart.png)
 
 ## Apêndice - Código Fonte da Implementação
 

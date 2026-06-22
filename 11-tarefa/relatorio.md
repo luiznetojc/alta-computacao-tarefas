@@ -164,3 +164,7 @@ int main(int argc, char *argv[])
     return 0;
 }
 ```
+
+
+### Gráficos
+![Gráfico de Speedup](./tarefa11_plot.png)

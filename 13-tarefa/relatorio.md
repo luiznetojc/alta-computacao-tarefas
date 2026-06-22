@@ -1,7 +1,7 @@
 # 13-Tarefa: Avaliação de Afinidade
 
 ## Metodologia
-Nesta tarefa, testamos o impacto de diferentes afinidades de *threads* geradas pelo OpenMP no desempenho do algoritmo solver de Navier-Stokes. Utilizamos um processador multicore (testado no macOS M-series / Apple Silicon para referência local com 16 threads via OMP).
+Nesta tarefa, testamos o impacto de diferentes afinidades de *threads* geradas pelo OpenMP no desempenho do algoritmo solver de Navier-Stokes. Utilizamos o cluster supercomputador NPAD (partição `intel-128` com 1 nó computacional) processando com 16 threads via OMP.
 
 Afinidade de *threads* diz respeito à forma como as threads de execução estão amarradas (bind) à hierarquia física do processador (Cores, Sockets, Hardware Threads).
 
@@ -12,32 +12,31 @@ As diretivas avaliadas foram:
 
 ## Resultados Obtidos
 
-Abaixo apresentamos os resultados coletados com 16 threads executando a versão `static`:
+Abaixo apresentamos os resultados coletados com 16 threads executando a versão `static` no nó do NPAD:
 
 | Threads | Afinidade (Places / Bind) | Tempo (s) | Speedup (T1/Tn) |
 |---------|-------------------------|-----------|-----------------|
-| 1       | Padrão (Serial)         | 2.509     | 1.00x           |
-| 16      | Padrão                  | 0.765     | 3.28x           |
-| 16      | cores / close           | 0.656     | 3.82x           |
-| 16      | cores / spread          | 0.610     | 4.11x           |
-| 16      | sockets / close         | 0.624     | 4.02x           |
-| 16      | sockets / spread        | 0.605     | 4.14x           |
-| 16      | threads / close         | 0.579     | 4.33x           |
-| 16      | threads / spread        | 0.589     | 4.26x           |
+| 1       | Padrão (Serial)         | 17.402    | 1.00x           |
+| 16      | Padrão                  | 1.787     | 9.73x           |
+| 16      | cores / close           | 1.790     | 9.72x           |
+| 16      | cores / spread          | 1.784     | 9.75x           |
+| 16      | sockets / close         | 1.788     | 9.73x           |
+| 16      | sockets / spread        | 1.788     | 9.73x           |
+| 16      | threads / close         | 1.946     | 8.94x           |
+| 16      | threads / spread        | 1.785     | 9.75x           |
 
 ## Discussão
 
-Através dos resultados, podemos destacar os seguintes pontos:
+Através dos resultados colhidos do cluster, podemos destacar os seguintes pontos:
 
-* **close vs spread:** Em quase todos os agrupamentos (places), a estratégia `spread` apresentou resultados ligeiramente melhores ou equivalentes em comparação com `close`. Isso ocorre porque `spread` tende a distribuir melhor o trabalho pela hierarquia do sistema, evitando contenção exagerada de caches de mesmo nível (L1/L2) e balanceando o aspecto térmico entre os núcleos reais. Contudo, na configuração de `threads`, o `close` foi mais rápido.
-* **cores vs threads:** A afinidade atrelada diretamente às *threads* físicas apresentou o melhor tempo e speedup absoluto (4.33x com `close`). Ao amarrar estritamente o worker na thread computacional ao invés do core, reduzimos ainda mais o custo de *context switch* do sistema operacional. O speedup não escalou muito mais do que ~4.3x devido ao tamanho do problema restrito (1000 iterações/pequena malha) limitando o ganho de 16 threads em detrimento do custo de sincronização das barreiras implícitas OpenMP.
-* Em todos os cenários as regras de afinidades mostraram uma evidente otimização em relação a execução Padrão.
+* **Escalabilidade Excepcional:** Comparando com o tempo puramente sequencial (17.40s) o uso maciço das 16 threads entregou expressivos $~9.7x$ de speedup em média.
+* **close vs spread:** Na configuração mais crítica (limitando à `threads`), a afinidade `close` obteve uma severa penalidade em relação à `spread` (1.94s vs 1.78s). Em arquiteturas robustas baseadas em chiplets/sockets grandes do NPAD, aglomerar agressivamente workers na mesma região física da arquitetura gera gargalos nas caches compartilhadas unificadas, superlotando os barramentos de hardware e as ULA (Unidades de Lógica). Em contraste, o uso espalhado (`spread`) balanceou os estêncils e aliviou a carga L2/L3.
+* **libgomp e OMP_PLACES:** Observamos na saída (`libgomp: Invalid value for environment variable OMP_PLACES` com valor nulo) que a ausência de parametrização clara na variável devolve restrições de parser da versão utilizada pelo compilador GNU do cluster, embora o tempo padrão do Linux tenha operado eficazmente. As definições nominais `cores` e `sockets` provaram-se consistentes e equivalentes em suas margens estritas de latência na partição testada, oscilando entre os 1.78~1.79s.
 
-### Apêndice
-
+### Script de Submissão (`job.sh`)
 ```bash
-#!/bin/bash
-#SBATCH --job-name=navier_afinidade
+#!/bin/bash 
+#SBATCH --job-name=navier_afinidade 
 #SBATCH --time=0-1:00
 #SBATCH --partition=intel-128
 #SBATCH --nodes=1
@@ -48,20 +47,31 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 make clean
 make
 
+echo "======================================"
+echo "Avaliação de Afinidade (Task 13)"
+echo "Número máximo de threads do Job: $SLURM_CPUS_PER_TASK"
+echo "======================================"
+
 EXEC="./navier_static"
 PLACES=("cores" "sockets" "threads")
 BINDS=("close" "spread")
 
 for THREADS in 4 8 16; do
     export OMP_NUM_THREADS=$THREADS
+    echo -e "\n============================================="
+    echo "Testando com $THREADS Threads"
+    echo "============================================="
+
     export OMP_PROC_BIND=false
     export OMP_PLACES=
+    echo "--- Afinidade PADRÃO (Sem binding explícito) ---"
     $EXEC $THREADS
 
     for PLACE in "${PLACES[@]}"; do
         for BIND in "${BINDS[@]}"; do
             export OMP_PLACES=$PLACE
             export OMP_PROC_BIND=$BIND
+            echo "--- Afinidade: PLACES=$PLACE, BIND=$BIND ---"
             $EXEC $THREADS
         done
     done

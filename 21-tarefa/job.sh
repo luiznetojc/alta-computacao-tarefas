@@ -41,6 +41,18 @@ for s in $SIZES; do
     SOLVE=$(echo "$OUTPUT" | grep "Solve time (s):" | awk '{print $4}')
     TOTAL=$(echo "$OUTPUT" | grep "Total time (s):" | awk '{print $4}')
     echo "GPU_Opt,$s,$SOLVE,$TOTAL" >> results.csv
+
+    echo "=== Running GPU Enter Exit Size: $s ==="
+    OUTPUT=$(./heat_gpu_enter_exit $s $NSTEPS)
+    SOLVE=$(echo "$OUTPUT" | grep "Solve time (s):" | awk '{print $4}')
+    TOTAL=$(echo "$OUTPUT" | grep "Total time (s):" | awk '{print $4}')
+    echo "GPU_Enter_Exit,$s,$SOLVE,$TOTAL" >> results.csv
+
+    echo "=== Running GPU Loop Size: $s ==="
+    OUTPUT=$(./heat_gpu_loop $s $NSTEPS)
+    SOLVE=$(echo "$OUTPUT" | grep "Solve time (s):" | awk '{print $4}')
+    TOTAL=$(echo "$OUTPUT" | grep "Total time (s):" | awk '{print $4}')
+    echo "GPU_Loop,$s,$SOLVE,$TOTAL" >> results.csv
 done
 
 echo "Profiling with nsys for n=1000 nsteps=10"

@@ -41,7 +41,7 @@ Ao analisar os resultados e os dados de profiling gerados com o `nsys`, destacam
   - A execução dos kernels matemáticos demorou em torno de ~129ms acumulado ao longo de 100 execuções (~1.29ms por iteração para uma matriz 4000x4000).
 - **Ganho Absoluto de Desempenho**: Com a otimização de dados correta, a versão **GPU Opt** para a malha maior de 4000x4000 reduziu o tempo de computação de 17.5 segundos na CPU p**0.13 segundos** na GPU - um ganho impressionante (speedup de mais de 130x no Solve). 
 
-![Gráfico de Barras - Tarefa 20](/Users/adm/Documents/Studies/alta-computacao-tarefas/tarefa_20_bar_chart.png)
+![Gráfico de Barras - Tarefa 20](./tarefa_20_bar_chart.png)
 
 ## 4. Apêndice: Código da Solução Otimizada
 

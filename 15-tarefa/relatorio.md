@@ -13,8 +13,8 @@ Aqui o tempo de envio não estrangula de imediato a passagem de código. Todos o
 **Ganhos:** Impede _deadlocks_. Aumenta o throughput caso o sistema operacional consiga enviar pacotes enquanto registra os assíncronos. No entanto o cálculo do array _AINDA_ não usufruiu da latência ociosa da network.
 
 ### 3. Sobreposição de Computação e Comunicação (Overlap c/ Non-Blocking pseudo-testes)
-Aqui dividimos a modelagem espacial em duas etapas. Enquanto a placa de rede mastiga _em background_ a cópia em RAM das requisições abertas em `MPI_Isend/MPI_Irecv`, em vez de paralisar tudo, o bloco computacional efetua o Update (`u_new`) de todas as **células estritamente internas** (células local_2 até local_N-1). Elas não precisam de valores transfronteiriços para seus estêncils.
-Quando os cálculos esgotam (escondendo eficientemente a latência do barramento), fazemos o cheque de término em cima das ghosts cells com `Waitall` (funciona homologo à arquitetura test). Confirmado a troca com os vizinhos, os dados de pontas `u[1]` e `u[local_N]` são finalmente iterados.
+Aqui aprimoramos o código para atender ativamente ao conceito de *polling* de rede usando o **`MPI_Testall`**. Foi estabelecido um laço *while* sobre as **células estritamente internas** (linhas que não dependem das *ghost cells*). Para cada porção de linhas processadas, o laço dispara um gatilho de verificação (`MPI_Testall`). Se a placa de rede confirmar que os buffers de envio/recebimento terminaram de trafegar antes do final das células, o *flag* de liberação desliga o polling e a CPU gasta o resto de sua execução puramente no núcleo sem perder ciclos checando a rede.
+Caso todas as células internas terminem mas a latência da rede atrase, existe a trava segura (`MPI_Waitall`) atuando como um fallback para aguardar os dados antes de computar as extremidades (Halo Cells).
 
 ### Resultados e Tempos de Execução no NPAD (Novo Modelo 2D - 4000x4000)
 
@@ -22,15 +22,16 @@ Testes executados no cluster NPAD com `mpirun -np 8` forçando **1 processo por 
 
 | Versão | Descrição | Tempo Total (s) |
 |:---|:---|:---|
-| 1 | Versao 2D: `MPI_Send` / `MPI_Recv` (Blocante) | 0.470836 |
-| 2 | Versao 2D: `MPI_Isend` / `MPI_Irecv` + `Waitall` (Não Blocante em Seq) | 0.466604 |
-| 3 | Versao 2D Atualizada: Sobreposição de Computação e Comunicação (Overlap) | 0.460717 |
+| 1 | Versao 2D: `MPI_Send` / `MPI_Recv` (Blocante) | 0.473445 |
+| 2 | Versao 2D: `MPI_Isend` / `MPI_Irecv` + `Waitall` (Não Blocante em Seq) | 0.473624 |
+| 3 | Versao 2D Atualizada: Sobreposição de Computação e Comunicação (Overlap c/ `MPI_Testall`) | 0.466717 |
 
 > **Nota:** Houve o registro de avisos relativos à inicialização do dispositivo OpenFabrics (`WARNING: There was an error initializing an OpenFabrics device... help-mpi-btl-openib.txt`), de forma idêntica à tarefa anterior. Trata-se de um ruído de configuração do driver InfiniBand no ambiente, não impactando a conclusão correta e a validação do benchmark executado por outros links.
 
 ### Conclusão e Observações
 
 Comparando as diferentes abordagens em um regime de malha 2D conectada intra-cluster:
+
 1. O aumento de carga nos limites (transmitindo vetores inteiros de 32 KB em vez de uma única variável escalar como no 1D) foi ideal para observar o distanciamento físico da latência isolada.
 2. A versão **Não-Blocante pura** logrou desconto frente a Blocante ao preencher e postar todas as transferências de uma vez em protocolo *Eager* nas placas, o que evita que os gargalos das pontas atrasem o laço subjacente.
 3. A versão com **Overlapping (Sobreposição Computação-Comunicação)** figura perfeitamente como a mais rápida absoluta. Essa diferença se instaura justamente porque, ao despachar a requisição pesada das *Halo Cells* via *Isend*, a CPU de imediato se vira para atualizar os blocos centrais de calor 2D da matriz local (que independem do fim da cópia de rede), camuflando a latência. 
@@ -288,10 +289,20 @@ int main(int argc, char **argv)
 			for(int c=0; c<COLS; c++) u[(local_R + 1) * COLS + c] = u[local_R * COLS + c];
 		}
 
-		for (int r = 2; r <= local_R - 1; r++)
-		{
-			for (int c = 1; c < COLS - 1; c++)
-			{
+		int flag = 0;
+		int next_r = 2;
+		int limit_r = local_R - 1;
+
+		// Processar os internos ENQUANTO aguarda (Polling)
+		while (!flag && next_r <= limit_r) {
+			if (req_count > 0) {
+				MPI_Testall(req_count, reqs, &flag, MPI_STATUSES_IGNORE);
+			} else {
+				flag = 1;
+			}
+
+			int r = next_r;
+			for (int c = 1; c < COLS - 1; c++) {
 				double up    = u[(r - 1) * COLS + c];
 				double down  = u[(r + 1) * COLS + c];
 				double left  = u[r * COLS + c - 1];
@@ -299,11 +310,29 @@ int main(int argc, char **argv)
 				double center = u[r * COLS + c];
 				u_new[r * COLS + c] = center + C * (up + down + left + right - 4.0 * center);
 			}
+			next_r++;
 		}
 
-		if (req_count > 0)
-			MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
+		// Se a rede acabou antes, processar o resto livremente
+		while (next_r <= limit_r) {
+			int r = next_r;
+			for (int c = 1; c < COLS - 1; c++) {
+				double up    = u[(r - 1) * COLS + c];
+				double down  = u[(r + 1) * COLS + c];
+				double left  = u[r * COLS + c - 1];
+				double right = u[r * COLS + c + 1];
+				double center = u[r * COLS + c];
+				u_new[r * COLS + c] = center + C * (up + down + left + right - 4.0 * center);
+			}
+			next_r++;
+		}
 
+		// Trava final se ainda n tem os dados da borda
+		if (!flag && req_count > 0) {
+			MPI_Waitall(req_count, reqs, MPI_STATUSES_IGNORE);
+		}
+
+		// Atualizar as bordas que dependem das celulas fantasmas
 		if (local_R >= 1)
 		{
 			int r = 1;
@@ -329,6 +358,7 @@ int main(int argc, char **argv)
 			}
 		}
 
+		// Update global
 		for (int r = 1; r <= local_R; r++)
 		{
 			for (int c = 1; c < COLS - 1; c++)
@@ -342,7 +372,7 @@ int main(int argc, char **argv)
 
 	if (rank == 0)
 	{
-		printf("Versao 2D Atualizada: MPI_Isend / MPI_Irecv + Sobreposicao C/ MPI_Test(like)\n");
+		printf("Versao 2D Atualizada: MPI_Isend / MPI_Irecv + Sobreposicao C/ MPI_Testall\n");
 		printf("Tempo total: %f segundos\n", end - start);
 	}
 
@@ -351,4 +381,37 @@ int main(int argc, char **argv)
 	MPI_Finalize();
 	return 0;
 }
+
+```
+
+### Script de Submissão (`job.sh`)
+```bash
+#!/bin/bash 
+#SBATCH --job-name=heat_diffusion
+#SBATCH --time=0-0:15
+#SBATCH --partition=intel-128
+#SBATCH --ntasks=8
+#SBATCH --nodes=8
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=1
+
+# O módulo do MPI precisa estar carregado no NPAD
+# module load mpi/openmpi-x86_64
+
+make clean
+make
+
+echo "================================================="
+echo "=== Testando MPI c/ 8 Processos MPI"
+echo "================================================="
+
+echo -e "\n1. Versao Blocante (MPI_Send/Recv)"
+mpirun -np 8 ./heat_blocking
+
+echo -e "\n2. Versao Nao-Blocante (MPI_Isend/Irecv + Wait puro)"
+mpirun -np 8 ./heat_nonblocking
+
+echo -e "\n3. Versao Otimizada c/ Sobreposicao (Isend/Irecv + Processamento Interno Hibrido)"
+mpirun -np 8 ./heat_overlap
+
 ```
